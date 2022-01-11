@@ -1,14 +1,20 @@
-import select from 'select-dom'
 import shuffle from 'lodash/shuffle'
+import select from 'select-dom'
+import { MATCH_ROOM_VETO_MAP_ITEMS } from '../../shared/settings'
+import storage from '../../shared/storage'
 import {
   hasFeatureAttribute,
   setFeatureAttribute
 } from '../helpers/dom-element'
-import storage from '../../shared/storage'
-import { notifyIf } from '../helpers/user-settings'
-import { getQuickMatch, getMatch, getSelf } from '../helpers/faceit-api'
-import { getRoomId, getTeamElements } from '../helpers/match-room'
+import {
+  getMatch,
+  getPlayerStats,
+  getQuickMatch,
+  getSelf
+} from '../helpers/faceit-api'
 import maps from '../helpers/maps'
+import { getRoomId, getTeamElements } from '../helpers/match-room'
+import { notifyIf } from '../helpers/user-settings'
 
 const FEATURE_ATTRIBUTE = 'veto-maps'
 const VETO_DELAY = 2000
@@ -45,11 +51,17 @@ export default async parentElement => {
     return
   }
 
-  const {
+  let {
     matchRoomAutoVetoMapItems,
     matchRoomAutoVetoMapsShuffle: shuffleMaps,
     matchRoomAutoVetoMapsShuffleAmount: shuffleMapsAmount
   } = await storage.getAll()
+
+  matchRoomAutoVetoMapItems = await getAutoVetoMaps(
+    match,
+    self.guid === faction1Leader ? 1 : 2
+  )
+
   let autoVetoItems = matchRoomAutoVetoMapItems.map(m => maps.csgo[m] || m)
 
   if (shuffleMaps) {
@@ -110,4 +122,55 @@ export default async parentElement => {
     title: 'Match Maps Veto',
     message: 'Maps will be vetoed automatically.'
   })
+}
+
+export async function getAutoVetoMaps(match, ourFaction) {
+  const { faction1, faction2 } = match.teams
+  const enemyMapScores = await getMapFactionMapScores(
+    ourFaction === 2 ? faction1 : faction2
+  )
+  console.log('enemy', enemyMapScores)
+  const ourMapScores = await getMapFactionMapScores(
+    ourFaction === 1 ? faction1 : faction2
+  )
+  console.log('our', ourMapScores)
+
+  const scores = MATCH_ROOM_VETO_MAP_ITEMS.map((v, i) => [
+    ourMapScores[v] - enemyMapScores[v],
+    i
+  ])
+  scores.sort((a, b) => b[0] - a[0])
+
+  const result = scores.map(([_, i]) => MATCH_ROOM_VETO_MAP_ITEMS[i])
+  return result
+}
+
+async function getMapFactionMapScores(faction) {
+  const { roster } = faction
+
+  const result = {}
+  for (const map of MATCH_ROOM_VETO_MAP_ITEMS) {
+    result[map] = 0
+  }
+
+  let totalElo = 0
+
+  for (const member of roster) {
+    const { id, elo } = member
+    totalElo += elo
+    const { winRates } = await getPlayerStats(id, 'csgo')
+    for (const map of MATCH_ROOM_VETO_MAP_ITEMS) {
+      if (winRates[map]) {
+        result[map] += Number(winRates[map]) * elo
+      } else {
+        result[map] += 50 * elo
+      }
+    }
+  }
+
+  for (const map of MATCH_ROOM_VETO_MAP_ITEMS) {
+    result[map] /= totalElo
+  }
+
+  return result
 }

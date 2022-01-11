@@ -1,17 +1,38 @@
 import mem from 'mem'
+import { MATCH_ROOM_VETO_MAP_ITEMS } from '../../shared/settings'
 
 const TOTAL_STATS_MAP = {
   m1: 'matches'
 }
 
-export const mapTotalStats = stats =>
-  Object.keys(TOTAL_STATS_MAP).reduce(
-    (acc, curr) => ({
-      ...acc,
-      [TOTAL_STATS_MAP[curr]]: stats[curr]
-    }),
-    {}
-  )
+export const mapTotalStats = (stats, segments) => {
+  const res = {
+    ...Object.keys(TOTAL_STATS_MAP).reduce(
+      (acc, curr) => ({
+        ...acc,
+        [TOTAL_STATS_MAP[curr]]: stats[curr]
+      }),
+      {}
+    ),
+    winRates: Object.fromEntries(
+      segments.reduce(
+        (prev, current) => [
+          ...prev,
+          ...Object.entries(current.segments).reduce(
+            (prev, [key, value]) =>
+              MATCH_ROOM_VETO_MAP_ITEMS.includes(key)
+                ? [...prev, [key, value.k6]]
+                : prev,
+            []
+          )
+        ],
+        []
+      )
+    )
+  }
+
+  return res
+}
 
 export const mapTotalStatsMemoized = mem(mapTotalStats)
 

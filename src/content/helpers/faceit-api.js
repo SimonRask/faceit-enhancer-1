@@ -1,14 +1,17 @@
-import pMemoize from 'p-memoize'
 import camelcaseKeys from 'camelcase-keys'
 import format from 'date-fns/format'
 import Cookies from 'js-cookie'
+import pMemoize from 'p-memoize'
 import browser from 'webextension-polyfill'
 import { ACTION_FETCH_FACEIT_API } from '../../shared/constants'
-import { mapTotalStatsMemoized, mapAverageStatsMemoized } from './stats'
+import { mapAverageStatsMemoized, mapTotalStatsMemoized } from './stats'
 
 export const CACHE_TIME = 600000
 
-async function fetchApi(path) {
+async function fetchApi(path, shouldCamelCase) {
+  if (shouldCamelCase === undefined) {
+    shouldCamelCase = true
+  }
   if (typeof path !== 'string') {
     throw new TypeError(`Expected \`path\` to be a string, got ${typeof path}`)
   }
@@ -40,7 +43,9 @@ async function fetchApi(path) {
       throw new Error(response)
     }
 
-    return camelcaseKeys(payload || response, { deep: true })
+    return shouldCamelCase
+      ? camelcaseKeys(payload || response, { deep: true })
+      : payload || response
   } catch (err) {
     console.error(err)
 
@@ -68,14 +73,15 @@ export const getPlayerStats = async (userId, game, size = 20) => {
   }
 
   let totalStats = await fetchApiMemoized(
-    `/stats/v1/stats/users/${userId}/games/${game}`
+    `/stats/v1/stats/users/${userId}/games/${game}`,
+    false
   )
 
   if (!totalStats || Object.keys(totalStats).length === 0) {
     return null
   }
 
-  totalStats = mapTotalStatsMemoized(totalStats.lifetime)
+  totalStats = mapTotalStatsMemoized(totalStats.lifetime, totalStats.segments)
 
   let averageStats = await fetchApiMemoized(
     `/stats/v1/stats/time/users/${userId}/games/${game}?size=${size}`

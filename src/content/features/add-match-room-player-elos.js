@@ -1,19 +1,20 @@
 import select from 'select-dom'
-import {
-  getTeamElements,
-  getRoomId,
-  getFactionDetails,
-  getTeamMemberElements,
-  getNicknameElement,
-  mapMatchNicknamesToPlayersMemoized
-} from '../helpers/match-room'
+import createEloElement from '../components/elo'
 import {
   hasFeatureAttribute,
   setFeatureAttribute,
   setStyle
 } from '../helpers/dom-element'
-import { getQuickMatch, getMatch, getUser } from '../helpers/faceit-api'
-import createEloElement from '../components/elo'
+import { getMatch, getQuickMatch, getUser } from '../helpers/faceit-api'
+import {
+  getFactionDetails,
+  getNicknameElement,
+  getRoomId,
+  getTeamElements,
+  getTeamMemberElements,
+  mapMatchNicknamesToPlayersMemoized
+} from '../helpers/match-room'
+import { getAutoVetoMaps } from './click-match-room-veto-maps'
 
 const FEATURE_ATTRIBUTE = 'player-elo'
 
@@ -28,6 +29,8 @@ export default async parent => {
   if (!match) {
     return
   }
+
+  console.log(roomId, await getAutoVetoMaps(match, 2))
 
   const { game } = match
 
